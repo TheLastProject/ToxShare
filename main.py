@@ -20,11 +20,14 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 #
 
+from __future__ import print_function
+
 import sys
 import os
 
 from time import sleep, time
-from os import path, listdir, makedirs
+from os.path import join, normpath, exists, basename, dirname, getsize
+from os import listdir, makedirs
 import fcntl
 
 from tox import Tox, OperationFailedError
@@ -33,6 +36,55 @@ SERVER = ["54.199.139.199", 33445, "7F9C31FE850E97CEFD4C4591DF93FC757C7C12549DDD
 admin = ""
 
 DATA = "data"
+SERV_ROOT = "files"
+
+class FileRecord(object):
+    def __init__(self, friendId, filename, size, op_recv=False):
+        self.friendId = friendId
+        self.filename = filename
+        self.size = size
+        self.sent = 0
+        self.recv = 0
+        self.fd = None
+        self.start = False
+        self.op_recv = op_recv
+
+    def setup(self):
+        if not self.op_recv:
+            self.fd = open(self.filename, 'r')
+            flags = fcntl.fcntl(self.fd, fcntl.F_GETFL)
+            fcntl.fcntl(self.fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+            self.start = True
+        else:
+            self.fd = open(self.filename, 'w')
+
+    def tear_down(self):
+        self.start = None
+        self.fd.close()
+
+    def rewind(self):
+        self.fd.seek(self.sent, os.SEEK_SET)
+
+    def print_progressbar(self):
+        COL = 80
+        if self.op_recv:
+            progress = float(self.recv) / self.size
+        else:
+            progress = float(self.sent) / self.size
+
+        print("[", end='')
+        total = COL - 7
+        level = int(total * progress)
+        for i in range(level):
+            print("#", end='')
+
+        for i in range(total - level):
+            print("-", end='')
+        print("] %3d%%\r" % int(progress * 100), end='')
+
+        if self.recv == self.size or self.sent == self.size:
+            print('')
+
 
 class ShareBot(Tox):
     def __init__(self):
@@ -41,14 +93,14 @@ class ShareBot(Tox):
         self.recv_files = {}
         self.localfiles = []
 
-        if path.exists('data'):
+        if exists('data'):
             self.load_from_file('data')
 
-        if path.exists(DATA):
+        if exists(DATA):
             self.load_from_file(DATA)
 
-        if not path.exists("files/"):
-            makedirs("files/")
+        if not exists(SERV_ROOT):
+            makedirs(SERV_ROOT)
         self.set_name("ShareBot")
         self.set_status_message("Send me a message with the word 'help'")
         print('ID: %s' % self.get_address())
@@ -93,26 +145,43 @@ class ShareBot(Tox):
             self.save_to_file('data')
             self.kill()
 
-    def do_file_senders(self):
-        for fno in self.send_files.keys():
-            ct = self.send_files[fno]
-            try:
-                chunck_size = self.file_data_size(ct['fn'])
-                print('Progress: %d' % (ct['sent'] * 100 / ct['size']))
-                while ct['start']:
-                    data = ct['fd'].read(chunck_size)
-                    if len(data):
-                        self.file_send_data(ct['fn'], fno, data)
-                    ct['sent'] += len(data)
+    def get_path(self, filename):
+        result = normpath(join(SERV_ROOT, filename))
 
-                    if ct['sent'] == ct['size']:
-                        ct['fd'].close()
-                        self.file_send_control(ct['fn'], 0, fno,
+        #: Possibly cross directory attack
+        if not result.startswith(SERV_ROOT):
+            result = normpath(join(SERV_ROOT, basename(filename)))
+
+        return result
+
+    def update_filelist(self):
+        self.localfiles = listdir(SERV_ROOT)
+        self.localfiles.sort()
+
+    def do_file_senders(self):
+        for fileno in self.send_files.keys():
+            rec = self.send_files[fileno]
+            if not rec.start:
+                continue
+
+            try:
+                chunck_size = self.file_data_size(fileno)
+                while True:
+                    data = rec.fd.read(chunck_size)
+                    if len(data):
+                        self.file_send_data(fileno, fileno, data)
+                    rec.sent += len(data)
+
+                    if rec.sent == rec.size:
+                        rec.tear_down()
+                        self.file_send_control(fileno, 0, fileno,
                                 Tox.FILECONTROL_FINISHED)
-                        del self.send_files[fno]
+                        del self.send_files[fileno]
                         break
             except OperationFailedError as e:
-                ct['fd'].seek(ct['sent'], os.SEEK_SET)
+                rec.rewind()
+
+            rec.print_progressbar()
 
     #: Temp function for testing
     def on_friend_request(self, pk, message):
@@ -133,14 +202,12 @@ class ShareBot(Tox):
             else:
                 search = False
             self.send_message(friendId, "I have the following files available. Type 'get', followed by the number between [] to receive that file.")
-            files = listdir("files/")
-            files.sort()
-            self.localfiles = []
+            self.update_filelist()
             currentid = 0
-            for result in files:
+            for result in self.localfiles:
                 if not search or (search and all(term in result for term in message[1:])):
-                    self.send_message(friendId, "[%d] %s (%s bytes)" % (currentid, result, path.getsize('files/%s' % result)))
-                self.localfiles.append(result)
+                    self.send_message(friendId, "[%d] %s (%s bytes)" %
+                            (currentid, result, getsize(self.get_path(result))))
                 currentid += 1
             self.send_message(friendId, "End of list.")
         elif message[0] == "get":
@@ -149,20 +216,18 @@ class ShareBot(Tox):
             except IndexError:
                 self.send_message(friendId, "Sorry, but I couldn't find that file.")
                 return
+            print("%s request file `%s', sending" % (self.get_name(friendId),
+                filename))
             try:
-                size = path.getsize('files/%s' % filename)
+                size = getsize(self.get_path(filename))
             except OSError:
                 self.send_message(friendId, "Sorry, but for some reason I can't access that file.")
                 return
-            file_no = self.new_file_sender(friendId, size, 'files/%s' % filename)
-            self.send_files[file_no] = {
-                'fn': friendId,
-                'fd': None,
-                'name': 'files/%s' % filename,
-                'size': size,
-                'sent': 0,
-                'start': False
-            }
+            file_no = self.new_file_sender(friendId, size,
+                    self.get_path(filename))
+
+            self.send_files[file_no] = FileRecord(friendId,
+                self.get_path(filename), size)
         elif message[0] == "add":
             if len(message) >= 2:
                 for newfriend in message[1:]:
@@ -175,31 +240,28 @@ class ShareBot(Tox):
                 self.send_message(friendId, "Add who?")
 
     def on_file_send_request(self, friendId, file_no, file_size, filename):
-        self.recv_files[file_no] = {
-            'fd': open('files/%s' % filename[:-1], 'w'),
-            'fn': friendId,
-            'size': file_size
-        }
+        #: TODO: implement some sort of access control
+        print("%s tries to upload a file `%s', accepted" %
+                (self.get_name(friendId), filename))
+        rec = FileRecord(friendId, self.get_path(filename[:-1]), file_size, True)
+        rec.setup()
+
+        self.recv_files[file_no] = rec
         self.file_send_control(friendId, 1, file_no, Tox.FILECONTROL_ACCEPT)
 
     def on_file_control(self, friendId, receive_send, file_no, ctrl, data):
-        # Check if friend accepts file send request
         if receive_send == 1 and ctrl == Tox.FILECONTROL_ACCEPT:
-            ct = self.send_files[file_no]
-            ct['start'] = True
-
-            fd = open(ct['name'], 'r')
-            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
-            fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
-            ct['fd'] = fd
+            self.send_files[file_no].setup()
         elif receive_send == 0 and ctrl == Tox.FILECONTROL_FINISHED:
-             self.recv_files[file_no]['fd'].close()
-             del self.recv_files[file_no]
+            self.recv_files[file_no].tear_down()
+            del self.recv_files[file_no]
 
     def on_file_data(self, friendId, file_no, data):
         if self.recv_files.has_key(file_no):
-            ct = self.recv_files[file_no]
-            ct['fd'].write(data)
+            rec = self.recv_files[file_no]
+            rec.fd.write(data)
+            rec.recv += len(data)
+            rec.print_progressbar()
 
 if len(sys.argv) == 2:
     admin = sys.argv[1]
