@@ -150,8 +150,8 @@ class ShareBot(Tox):
             except: # How to catch os.error? FIXME
                 self.send_message(friendId, "Sorry, but for some reason I can't access that file.")
                 return
-            file_number = self.new_file_sender(friendId, size, 'files/%s' % filename)
-            self.files[file_number] = {
+            file_no = self.new_file_sender(friendId, size, 'files/%s' % filename)
+            self.files[file_no] = {
                 'fn': friendId,
                 'fd': None,
                 'name': 'files/%s' % filename,
@@ -170,21 +170,13 @@ class ShareBot(Tox):
             else:
                 self.send_message(friendId, "Add who?")
 
-    def on_file_send_request(self, friendId, file_number, file_size, filename):
-        # Contrary to the name, this is actually for receiving files
-
-        # First, make sure the file is empty
-        #f = open('files/%s' % filename, 'w')
-        #f.close()
-
-        #self.file_send_control(friendId, 1, file_number, Tox.FILECONTROL_ACCEPT)
-        #self.files[file_number] = filename
+    def on_file_send_request(self, friendId, file_no, file_size, filename):
         pass
 
-    def on_file_control(self, friendId, receive_send, file_number, control_type, data):
+    def on_file_control(self, friendId, receive_send, file_no, c_type, data):
         # Check if friend accepts file send request
         if receive_send == 1 and control_type == Tox.FILECONTROL_ACCEPT:
-            ct = self.files[file_number]
+            ct = self.files[file_no]
             ct['start'] = True
 
             fd = open(ct['name'], 'r')
@@ -192,11 +184,7 @@ class ShareBot(Tox):
             fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
             ct['fd'] = fd
 
-    def on_file_data(self, friendId, file_number, data):
-        # Save file as it is sent
-        #f = open('files/%s' % self.files[file_number], 'a')
-        #f.write('data')
-        #f.close()
+    def on_file_data(self, friendId, file_no, data):
         pass
 
 if len(sys.argv) == 2:
