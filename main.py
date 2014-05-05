@@ -54,7 +54,7 @@ class ShareBot(Tox):
         if admin:
             try:
                 self.add_friend(admin, "Hello, admin. It's ShareBot.")
-            except: # This yields tox.OperationFailedError if the friend is already there. How to catch? FIXME
+            except OperationFailedError:
                 pass
         else:
             if not self.count_friendlist():
@@ -147,7 +147,7 @@ class ShareBot(Tox):
                 return
             try:
                 size = path.getsize('files/%s' % filename)
-            except: # How to catch os.error? FIXME
+            except OSError:
                 self.send_message(friendId, "Sorry, but for some reason I can't access that file.")
                 return
             file_number = self.new_file_sender(friendId, size, 'files/%s' % filename)
@@ -164,7 +164,7 @@ class ShareBot(Tox):
                 for newfriend in message[1:]:
                     try:
                         self.add_friend(newfriend, "Hey, it's ShareBot. Someone wants to give you access to my files. Please accept my friend request.")
-                    except: # tox.OperationalError FIXME
+                    except OperationFailedError:
                         pass
                 self.send_message(friendId, "Friend request(s) sent")
             else:
