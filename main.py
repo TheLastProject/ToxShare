@@ -35,7 +35,6 @@ from tox import Tox, OperationFailedError
 SERVER = ["54.199.139.199", 33445, "7F9C31FE850E97CEFD4C4591DF93FC757C7C12549DDD55F8EEAECC34FE76C029"]
 admin = ""
 
-DATA = "data"
 SERV_ROOT = "files"
 
 class FileRecord(object):
@@ -95,9 +94,6 @@ class ShareBot(Tox):
 
         if exists('data'):
             self.load_from_file('data')
-
-        if exists(DATA):
-            self.load_from_file(DATA)
 
         if not exists(SERV_ROOT):
             makedirs(SERV_ROOT)
