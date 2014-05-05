@@ -56,6 +56,10 @@ class ShareBot(Tox):
                 self.add_friend(admin, "Hello, admin. It's ShareBot.")
             except: # This yields tox.OperationFailedError if the friend is already there. How to catch? FIXME
                 pass
+        else:
+            if not self.count_friendlist():
+                print("ShareBot has no friends added. Please restart ShareBot and give your Tox ID as the last argument")
+                exit(1)
 
         self.connect()
 
@@ -85,7 +89,7 @@ class ShareBot(Tox):
                 self.do()
                 sleep(0.01)
         except KeyboardInterrupt:
-            self.save_to_file(DATA)
+            self.save_to_file('data')
             self.kill()
 
     def do_file_senders(self):
@@ -122,7 +126,7 @@ class ShareBot(Tox):
         if message[0] == "help":
             self.send_message(friendId, "Type 'list' to get a list of files I can serve you.")
             self.send_message(friendId, "Type 'get', followed by the number of the file you want to have sent to you.")
-            self.send_message(friendId, "Type 'add', followed by a friend's ID, to give a friend access to me.")
+            self.send_message(friendId, "Type 'add', followed by one or more friend ID(s), to give one or more friend(s) access to me.")
             self.send_message(friendId, "To add a file to my collection, simply start a file transfer.")
         elif message[0] == "list":
             self.send_message(friendId, "I have the following files available. Type 'get', followed by the number between [] to receive that file.")
@@ -156,9 +160,13 @@ class ShareBot(Tox):
                 'start': False
             }
         elif message[0] == "add":
-            if message[1]:
-                self.add_friend(message[1], "Hey, it's ShareBot. Someone wants to give you access to my files. Please accept my friend request.")
-                self.send_message(friendId, "Friend request sent")
+            if len(message) >= 2:
+                for newfriend in message[1:]:
+                    try:
+                        self.add_friend(newfriend, "Hey, it's ShareBot. Someone wants to give you access to my files. Please accept my friend request.")
+                    except: # tox.OperationalError FIXME
+                        pass
+                self.send_message(friendId, "Friend request(s) sent")
             else:
                 self.send_message(friendId, "Add who?")
 
