@@ -243,7 +243,7 @@ class ShareBot(Tox):
         #: TODO: implement some sort of access control
         print("%s tries to upload a file `%s', accepted" %
                 (self.get_name(friendId), filename))
-        rec = FileRecord(friendId, self.get_path(filename[:-1]), file_size, True)
+        rec = FileRecord(friendId, self.get_path(filename), file_size, True)
         rec.setup()
 
         self.recv_files[file_no] = rec
