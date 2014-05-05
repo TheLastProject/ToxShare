@@ -123,18 +123,23 @@ class ShareBot(Tox):
     def on_friend_message(self, friendId, message):
         message = message.split(" ")
         if message[0] == "help":
-            self.send_message(friendId, "Type 'list' to get a list of files I can serve you.")
+            self.send_message(friendId, "Type 'list', optionally followed by a search term, to get a list of files I can serve you.")
             self.send_message(friendId, "Type 'get', followed by the number of the file you want to have sent to you.")
             self.send_message(friendId, "Type 'add', followed by one or more friend ID(s), to give one or more friend(s) access to me.")
             self.send_message(friendId, "To add a file to my collection, simply start a file transfer.")
         elif message[0] == "list":
+            if len(message) >= 2:
+                search = True
+            else:
+                search = False
             self.send_message(friendId, "I have the following files available. Type 'get', followed by the number between [] to receive that file.")
             files = listdir("files/")
             files.sort()
             self.localfiles = []
             currentid = 0
             for result in files:
-                self.send_message(friendId, "[%d] %s (%s bytes)" % (currentid, result, path.getsize('files/%s' % result)))
+                if not search or (search and all(term in result for term in message[1:])):
+                    self.send_message(friendId, "[%d] %s (%s bytes)" % (currentid, result, path.getsize('files/%s' % result)))
                 self.localfiles.append(result)
                 currentid += 1
             self.send_message(friendId, "End of list.")
