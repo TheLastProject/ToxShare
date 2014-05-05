@@ -1,6 +1,6 @@
 #
 # @file main.py
-# @author TheLastProject
+# @author TheLastProject, aitjcize
 #
 # Copyright (C) 2014 TheLastProject
 # All Rights reserved.
@@ -21,22 +21,30 @@
 #
 
 import sys
-from tox import Tox
+import os
 
 from time import sleep, time
 from os import path, listdir, makedirs
+import fcntl
 
-SERVER = ["54.199.139.199", 33445, "9FD9944C1B4C2B48150D3B9759605FDE6032082AC4E75F1EBEBF8ED427D02E5765FB44FEF8BD"] # The last is my ID
+from tox import Tox, OperationFailedError
+
+SERVER = ["54.199.139.199", 33445, "7F9C31FE850E97CEFD4C4591DF93FC757C7C12549DDD55F8EEAECC34FE76C029"]
 admin = ""
+
+DATA = "data"
 
 class ShareBot(Tox):
     def __init__(self):
-        
+
         self.files = {}
         self.localfiles = []
 
         if path.exists('data'):
             self.load_from_file('data')
+
+        if path.exists(DATA):
+            self.load_from_file(DATA)
 
         if not path.exists("files/"):
             makedirs("files/")
@@ -71,11 +79,43 @@ class ShareBot(Tox):
                     self.connect()
                     checked = False
 
+                if len(self.files):
+                    self.do_file_senders()
+
                 self.do()
                 sleep(0.01)
         except KeyboardInterrupt:
             self.save_to_file(DATA)
             self.kill()
+
+    def do_file_senders(self):
+        for fno in self.files.keys():
+            ct = self.files[fno]
+            try:
+                chunck_size = self.file_data_size(ct['fn'])
+                print('Progress: %d' % (ct['sent'] * 100 / ct['size']))
+                while ct['start']:
+                    data = ct['fd'].read(chunck_size)
+                    if len(data):
+                        self.file_send_data(ct['fn'], fno, data)
+                    ct['sent'] += len(data)
+
+                    if ct['sent'] == ct['size']:
+                        print('Done')
+                        ct['fd'].close()
+                        self.file_send_control(ct['fn'], 0, fno,
+                                Tox.FILECONTROL_FINISHED)
+                        del self.files[fno]
+                        break
+            except OperationFailedError as e:
+                ct['fd'].seek(ct['sent'], os.SEEK_SET)
+                pass
+
+    #: Temp function for testing
+    def on_friend_request(self, pk, message):
+        print('Friend request from %s: %s' % (pk, message))
+        self.add_friend_norequest(pk)
+        print('Accepted.')
 
     def on_friend_message(self, friendId, message):
         message = message.split(" ")
@@ -107,7 +147,14 @@ class ShareBot(Tox):
                 self.send_message(friendId, "Sorry, but for some reason I can't access that file.")
                 return
             file_number = self.new_file_sender(friendId, size, 'files/%s' % filename)
-            self.files[file_number] = filename
+            self.files[file_number] = {
+                'fn': friendId,
+                'fd': None,
+                'name': 'files/%s' % filename,
+                'size': size,
+                'sent': 0,
+                'start': False
+            }
         elif message[0] == "add":
             if message[1]:
                 self.add_friend(message[1], "Hey, it's ShareBot. Someone wants to give you access to my files. Please accept my friend request.")
@@ -119,29 +166,30 @@ class ShareBot(Tox):
         # Contrary to the name, this is actually for receiving files
 
         # First, make sure the file is empty
-        f = open('files/%s' % filename, 'w')
-        f.close()
+        #f = open('files/%s' % filename, 'w')
+        #f.close()
 
-        self.file_send_control(friendId, 1, file_number, Tox.FILECONTROL_ACCEPT)
-        self.files[file_number] = filename
+        #self.file_send_control(friendId, 1, file_number, Tox.FILECONTROL_ACCEPT)
+        #self.files[file_number] = filename
+        pass
 
     def on_file_control(self, friendId, receive_send, file_number, control_type, data):
         # Check if friend accepts file send request
-        if receive_send and control_type == Tox.FILECONTROL_ACCEPT:
-            filename = self.files[file_number]
-            f = open('files/%s' % filename, 'r')
-            max_size_part = self.file_data_size(friendId)
-            bytessend = 0
-            while bytessend < path.getsize('files/%s' % filename):
-                data = f.read(max_size_part)
-                self.file_send_data(friendId, file_number, data)
-            f.close()
+        if receive_send == 1 and control_type == Tox.FILECONTROL_ACCEPT:
+            ct = self.files[file_number]
+            ct['start'] = True
+
+            fd = open(ct['name'], 'r')
+            flags = fcntl.fcntl(fd, fcntl.F_GETFL)
+            fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+            ct['fd'] = fd
 
     def on_file_data(self, friendId, file_number, data):
         # Save file as it is sent
-        f = open('files/%s' % self.files[file_number], 'a')
-        f.write('data')
-        f.close()
+        #f = open('files/%s' % self.files[file_number], 'a')
+        #f.write('data')
+        #f.close()
+        pass
 
 if len(sys.argv) == 2:
     admin = sys.argv[1]
