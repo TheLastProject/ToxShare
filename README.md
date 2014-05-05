@@ -29,10 +29,10 @@ How to use ToxShare
 --------
 
 ToxShare is very simple to use and listens to the following commands (in alphabetical order):
-* add <ToxID> -> add one or more users to ToxShare's friendlist
-* get <file> -> get a file as listed by the ``list`` command
+* add `<ToxID`> -> add one or more users to ToxShare's friendlist
+* get `<file`> -> get a file as listed by the ``list`` command
 * help -> get a list of commands and instructions
-* list [<search term>] -> list all files. When a search term is defined, list the files which match the search term
+* list [`<search term`>] -> list all files. When a search term is defined, list the files which match the search term
 
 To add a file to ToxShare's storage, simply start a file transfer to it. ToxShare will automatically accept the file transfer and save the file accordingly.
 
