@@ -37,7 +37,8 @@ DATA = "data"
 class ShareBot(Tox):
     def __init__(self):
 
-        self.files = {}
+        self.send_files = {}
+        self.recv_files = {}
         self.localfiles = []
 
         if path.exists('data'):
@@ -83,7 +84,7 @@ class ShareBot(Tox):
                     self.connect()
                     checked = False
 
-                if len(self.files):
+                if len(self.send_files):
                     self.do_file_senders()
 
                 self.do()
@@ -93,8 +94,8 @@ class ShareBot(Tox):
             self.kill()
 
     def do_file_senders(self):
-        for fno in self.files.keys():
-            ct = self.files[fno]
+        for fno in self.send_files.keys():
+            ct = self.send_files[fno]
             try:
                 chunck_size = self.file_data_size(ct['fn'])
                 print('Progress: %d' % (ct['sent'] * 100 / ct['size']))
@@ -105,15 +106,13 @@ class ShareBot(Tox):
                     ct['sent'] += len(data)
 
                     if ct['sent'] == ct['size']:
-                        print('Done')
                         ct['fd'].close()
                         self.file_send_control(ct['fn'], 0, fno,
                                 Tox.FILECONTROL_FINISHED)
-                        del self.files[fno]
+                        del self.send_files[fno]
                         break
             except OperationFailedError as e:
                 ct['fd'].seek(ct['sent'], os.SEEK_SET)
-                pass
 
     #: Temp function for testing
     def on_friend_request(self, pk, message):
@@ -150,8 +149,8 @@ class ShareBot(Tox):
             except OSError:
                 self.send_message(friendId, "Sorry, but for some reason I can't access that file.")
                 return
-            file_number = self.new_file_sender(friendId, size, 'files/%s' % filename)
-            self.files[file_number] = {
+            file_no = self.new_file_sender(friendId, size, 'files/%s' % filename)
+            self.send_files[file_no] = {
                 'fn': friendId,
                 'fd': None,
                 'name': 'files/%s' % filename,
@@ -170,34 +169,32 @@ class ShareBot(Tox):
             else:
                 self.send_message(friendId, "Add who?")
 
-    def on_file_send_request(self, friendId, file_number, file_size, filename):
-        # Contrary to the name, this is actually for receiving files
+    def on_file_send_request(self, friendId, file_no, file_size, filename):
+        self.recv_files[file_no] = {
+            'fd': open('files/%s' % filename[:-1], 'w'),
+            'fn': friendId,
+            'size': file_size
+        }
+        self.file_send_control(friendId, 1, file_no, Tox.FILECONTROL_ACCEPT)
 
-        # First, make sure the file is empty
-        #f = open('files/%s' % filename, 'w')
-        #f.close()
-
-        #self.file_send_control(friendId, 1, file_number, Tox.FILECONTROL_ACCEPT)
-        #self.files[file_number] = filename
-        pass
-
-    def on_file_control(self, friendId, receive_send, file_number, control_type, data):
+    def on_file_control(self, friendId, receive_send, file_no, ctrl, data):
         # Check if friend accepts file send request
-        if receive_send == 1 and control_type == Tox.FILECONTROL_ACCEPT:
-            ct = self.files[file_number]
+        if receive_send == 1 and ctrl == Tox.FILECONTROL_ACCEPT:
+            ct = self.send_files[file_no]
             ct['start'] = True
 
             fd = open(ct['name'], 'r')
             flags = fcntl.fcntl(fd, fcntl.F_GETFL)
             fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
             ct['fd'] = fd
+        elif receive_send == 0 and ctrl == Tox.FILECONTROL_FINISHED:
+             self.recv_files[file_no]['fd'].close()
+             del self.recv_files[file_no]
 
-    def on_file_data(self, friendId, file_number, data):
-        # Save file as it is sent
-        #f = open('files/%s' % self.files[file_number], 'a')
-        #f.write('data')
-        #f.close()
-        pass
+    def on_file_data(self, friendId, file_no, data):
+        if self.recv_files.has_key(file_no):
+            ct = self.recv_files[file_no]
+            ct['fd'].write(data)
 
 if len(sys.argv) == 2:
     admin = sys.argv[1]
