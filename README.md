@@ -21,7 +21,7 @@ How to run ToxShare
 To run ToxShare, execute the main.py file using Python. For example:
 ``python main.py``
 
-*Note: On the first run, be sure to append the Tox ID of the administrator to the command. As ToxShare will only communicate with users on its friendlist and does not accept friend invites, it is important that the bot adds you to its friend list. To do so, run the following command, replacing ToxID with your own Tox ID:*
+*Note: On the first run, be sure to append the Tox ID of the administrator to the command. As ToxShare will only communicate with users on its friend list and does not accept friend invites, it is important that the bot adds you to its friend list. To do so, run the following command, replacing ToxID with your own Tox ID:*
 
 ``python main.py ToxID``
 
@@ -29,10 +29,10 @@ How to use ToxShare
 --------
 
 ToxShare is very simple to use and listens to the following commands (in alphabetical order):
-* add `<ToxID`> -> add one or more users to ToxShare's friendlist
-* get `<file`> -> get a file as listed by the ``list`` command
+* add `<ToxID>` -> add one or more users to ToxShare's friend list
+* get `<file>` -> get a file as listed by the ``list`` command
 * help -> get a list of commands and instructions
-* list [`<search term`>] -> list all files. When a search term is defined, list the files which match the search term
+* list [`<search term>`] -> list all files. When a search term is defined, list the files which match the search term
 
 To add a file to ToxShare's storage, simply start a file transfer to it. ToxShare will automatically accept the file transfer and save the file accordingly.
 
