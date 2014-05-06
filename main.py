@@ -155,7 +155,8 @@ class ShareBot(Tox):
         localdirs = listdir(SERV_ROOT)
         for directory in localdirs:
             for localfile in listdir(os.path.join(SERV_ROOT, directory)):
-                self.localfiles.append("%s/%s" % (directory, localfile))
+                if localfile[-5:] != ".part": # Don't list incomplete transfers
+                    self.localfiles.append("%s/%s" % (directory, localfile))
         self.localfiles.sort()
 
     def do_file_senders(self):
@@ -250,7 +251,7 @@ class ShareBot(Tox):
         if not exists(path):
             makedirs(path)
 
-        rec = FileRecord(friendId, self.get_path("%s/%s" % (friend_key, filename)), file_size, True)
+        rec = FileRecord(friendId, self.get_path("%s/%s.part" % (friend_key, filename)), file_size, True)
         rec.setup()
 
         self.recv_files[file_no] = rec
@@ -261,6 +262,8 @@ class ShareBot(Tox):
             self.send_files[file_no].setup()
         elif receive_send == 0 and ctrl == Tox.FILECONTROL_FINISHED:
             self.recv_files[file_no].tear_down()
+            filename = self.recv_files[file_no].filename
+            os.rename(filename, filename.rstrip(".part"))
             del self.recv_files[file_no]
 
     def on_file_data(self, friendId, file_no, data):
