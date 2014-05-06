@@ -48,16 +48,13 @@ class FileRecord(object):
         self.start = False
         self.op_recv = op_recv
 
-    def setup(self, friend_key):
+    def setup(self):
         if not self.op_recv:
             self.fd = open(self.filename, 'r')
             flags = fcntl.fcntl(self.fd, fcntl.F_GETFL)
             fcntl.fcntl(self.fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
             self.start = True
         else:
-            path = join(SERV_ROOT, friend_key)
-            if not exists(path):
-                makedirs(path)
             self.fd = open(self.filename, 'w')
 
     def tear_down(self):
@@ -247,15 +244,21 @@ class ShareBot(Tox):
         print("%s tries to upload a file `%s', accepted" %
                 (self.get_name(friendId), filename))
         friend_key = self.get_client_id(friendId)
+        
+        # Make sure this user has a directory
+        path = join(SERV_ROOT, friend_key)
+        if not exists(path):
+            makedirs(path)
+
         rec = FileRecord(friendId, self.get_path("%s/%s" % (friend_key, filename)), file_size, True)
-        rec.setup(friend_key)
+        rec.setup()
 
         self.recv_files[file_no] = rec
         self.file_send_control(friendId, 1, file_no, Tox.FILECONTROL_ACCEPT)
 
     def on_file_control(self, friendId, receive_send, file_no, ctrl, data):
         if receive_send == 1 and ctrl == Tox.FILECONTROL_ACCEPT:
-            self.send_files[file_no].setup(None)
+            self.send_files[file_no].setup()
         elif receive_send == 0 and ctrl == Tox.FILECONTROL_FINISHED:
             self.recv_files[file_no].tear_down()
             del self.recv_files[file_no]
