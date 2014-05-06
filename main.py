@@ -48,13 +48,16 @@ class FileRecord(object):
         self.start = False
         self.op_recv = op_recv
 
-    def setup(self):
+    def setup(self, friend_key):
         if not self.op_recv:
             self.fd = open(self.filename, 'r')
             flags = fcntl.fcntl(self.fd, fcntl.F_GETFL)
             fcntl.fcntl(self.fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
             self.start = True
         else:
+            path = join(SERV_ROOT, friend_key)
+            if not exists(path):
+                makedirs(path)
             self.fd = open(self.filename, 'w')
 
     def tear_down(self):
@@ -151,7 +154,11 @@ class ShareBot(Tox):
         return result
 
     def update_filelist(self):
-        self.localfiles = listdir(SERV_ROOT)
+        self.localfiles = []
+        localdirs = listdir(SERV_ROOT)
+        for directory in localdirs:
+            for localfile in listdir(os.path.join(SERV_ROOT, directory)):
+                self.localfiles.append("%s/%s" % (directory, localfile))
         self.localfiles.sort()
 
     def do_file_senders(self):
@@ -203,7 +210,7 @@ class ShareBot(Tox):
             for result in self.localfiles:
                 if not search or (search and all(term in result for term in message[1:])):
                     self.send_message(friendId, "[%d] %s (%s bytes)" %
-                            (currentid, result, getsize(self.get_path(result))))
+                            (currentid, result.split("/")[1], getsize(self.get_path(result))))
                 currentid += 1
             self.send_message(friendId, "End of list.")
         elif message[0] == "get":
@@ -239,15 +246,16 @@ class ShareBot(Tox):
         #: TODO: implement some sort of access control
         print("%s tries to upload a file `%s', accepted" %
                 (self.get_name(friendId), filename))
-        rec = FileRecord(friendId, self.get_path(filename), file_size, True)
-        rec.setup()
+        friend_key = self.get_client_id(friendId)
+        rec = FileRecord(friendId, self.get_path("%s/%s" % (friend_key, filename)), file_size, True)
+        rec.setup(friend_key)
 
         self.recv_files[file_no] = rec
         self.file_send_control(friendId, 1, file_no, Tox.FILECONTROL_ACCEPT)
 
     def on_file_control(self, friendId, receive_send, file_no, ctrl, data):
         if receive_send == 1 and ctrl == Tox.FILECONTROL_ACCEPT:
-            self.send_files[file_no].setup()
+            self.send_files[file_no].setup(None)
         elif receive_send == 0 and ctrl == Tox.FILECONTROL_FINISHED:
             self.recv_files[file_no].tear_down()
             del self.recv_files[file_no]
