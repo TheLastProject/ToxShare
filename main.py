@@ -26,7 +26,7 @@ import sys
 import os
 
 from time import sleep, time
-from os.path import join, normpath, exists, basename, dirname, getsize
+from os.path import join, normpath, exists, basename, dirname, getsize, sep
 from os import listdir, makedirs
 import fcntl
 
@@ -154,9 +154,9 @@ class ShareBot(Tox):
         self.localfiles = []
         localdirs = listdir(SERV_ROOT)
         for directory in localdirs:
-            for localfile in listdir(os.path.join(SERV_ROOT, directory)):
+            for localfile in listdir(join(SERV_ROOT, directory)):
                 if localfile[-5:] != ".part": # Don't list incomplete transfers
-                    self.localfiles.append("%s/%s" % (directory, localfile))
+                    self.localfiles.append("%s%s%s" % (directory, sep, localfile))
         self.localfiles.sort()
 
     def do_file_senders(self):
@@ -184,12 +184,6 @@ class ShareBot(Tox):
 
             rec.print_progressbar()
 
-    #: Temp function for testing
-    def on_friend_request(self, pk, message):
-        print('Friend request from %s: %s' % (pk, message))
-        self.add_friend_norequest(pk)
-        print('Accepted.')
-
     def on_friend_message(self, friendId, message):
         message = message.split(" ")
         if message[0] == "help":
@@ -208,7 +202,7 @@ class ShareBot(Tox):
             for result in self.localfiles:
                 if not search or (search and all(term in result for term in message[1:])):
                     self.send_message(friendId, "[%d] %s (%s bytes)" %
-                            (currentid, result.split("/")[1], getsize(self.get_path(result))))
+                            (currentid, result.split(sep)[1], getsize(self.get_path(result))))
                 currentid += 1
             self.send_message(friendId, "End of list.")
         elif message[0] == "get":
@@ -251,7 +245,7 @@ class ShareBot(Tox):
         if not exists(path):
             makedirs(path)
 
-        rec = FileRecord(friendId, self.get_path("%s/%s.part" % (friend_key, filename)), file_size, True)
+        rec = FileRecord(friendId, self.get_path("%s%s%s" % (friend_key, sep, filename)), file_size, True)
         rec.setup()
 
         self.recv_files[file_no] = rec
